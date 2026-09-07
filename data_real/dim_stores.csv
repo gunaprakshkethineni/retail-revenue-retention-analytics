@@ -1,0 +1,40 @@
+store_id,store_name,channel,city,country,region,opened_date
+1,Australia (Online Export),Online,Australia,Australia,International Export,2009-12-01
+2,Austria (Online Export),Online,Austria,Austria,International Export,2009-12-01
+3,Bahrain (Online Export),Online,Bahrain,Bahrain,International Export,2009-12-01
+4,Belgium (Online Export),Online,Belgium,Belgium,International Export,2009-12-01
+5,Brazil (Online Export),Online,Brazil,Brazil,International Export,2009-12-01
+6,Canada (Online Export),Online,Canada,Canada,International Export,2009-12-01
+7,Channel Islands (Online Export),Online,Channel Islands,Channel Islands,International Export,2009-12-01
+8,Cyprus (Online Export),Online,Cyprus,Cyprus,International Export,2009-12-01
+9,Czech Republic (Online Export),Online,Czech Republic,Czech Republic,International Export,2009-12-01
+10,Denmark (Online Export),Online,Denmark,Denmark,International Export,2009-12-01
+11,European Community (Online Export),Online,European Community,European Community,International Export,2009-12-01
+12,Finland (Online Export),Online,Finland,Finland,International Export,2009-12-01
+13,France (Online Export),Online,France,France,International Export,2009-12-01
+14,Germany (Online Export),Online,Germany,Germany,International Export,2009-12-01
+15,Greece (Online Export),Online,Greece,Greece,International Export,2009-12-01
+16,Iceland (Online Export),Online,Iceland,Iceland,International Export,2009-12-01
+17,Israel (Online Export),Online,Israel,Israel,International Export,2009-12-01
+18,Italy (Online Export),Online,Italy,Italy,International Export,2009-12-01
+19,Japan (Online Export),Online,Japan,Japan,International Export,2009-12-01
+20,Korea (Online Export),Online,Korea,Korea,International Export,2009-12-01
+21,Lebanon (Online Export),Online,Lebanon,Lebanon,International Export,2009-12-01
+22,Lithuania (Online Export),Online,Lithuania,Lithuania,International Export,2009-12-01
+23,Malta (Online Export),Online,Malta,Malta,International Export,2009-12-01
+24,Netherlands (Online Export),Online,Netherlands,Netherlands,International Export,2009-12-01
+25,Nigeria (Online Export),Online,Nigeria,Nigeria,International Export,2009-12-01
+26,Norway (Online Export),Online,Norway,Norway,International Export,2009-12-01
+27,Poland (Online Export),Online,Poland,Poland,International Export,2009-12-01
+28,Portugal (Online Export),Online,Portugal,Portugal,International Export,2009-12-01
+29,RSA (Online Export),Online,RSA,RSA,International Export,2009-12-01
+30,Saudi Arabia (Online Export),Online,Saudi Arabia,Saudi Arabia,International Export,2009-12-01
+31,Singapore (Online Export),Online,Singapore,Singapore,International Export,2009-12-01
+32,Spain (Online Export),Online,Spain,Spain,International Export,2009-12-01
+33,Sweden (Online Export),Online,Sweden,Sweden,International Export,2009-12-01
+34,Switzerland (Online Export),Online,Switzerland,Switzerland,International Export,2009-12-01
+35,Thailand (Online Export),Online,Thailand,Thailand,International Export,2009-12-01
+36,USA (Online Export),Online,USA,USA,International Export,2009-12-01
+37,United Arab Emirates (Online Export),Online,United Arab Emirates,United Arab Emirates,International Export,2009-12-01
+38,Unspecified (Online Export),Online,Unspecified,Unspecified,International Export,2009-12-01
+39,West Indies (Online Export),Online,West Indies,West Indies,International Export,2009-12-01
