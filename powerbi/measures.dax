@@ -1,0 +1,512 @@
+// =====================================================================================
+// measures.dax
+// Every measure and calculated column used in the Power BI report.
+//
+// Each one is numbered (M1, M2... for measures; C1, C2... for calculated columns).
+// build_pbip.py reads this file and generates the Power BI model from it, so this stays
+// the single source of truth - I only ever edit the DAX here, never in the report.
+//
+// CORE     = you need this for the dashboard to work. Do all of these.
+// OPTIONAL = nice extras. Skip them the first time through and come back later.
+//
+// IMPORTANT: measures and calculated columns are NOT the same thing.
+//   - A MEASURE is created with "New measure". It calculates on the fly.
+//   - A CALCULATED COLUMN is created with "New column". It is stored on a table row
+//     by row, and it must be created ON THE TABLE NAMED IN THE COMMENT.
+// I mixed these up constantly when I started. The error you get is
+// "A single value for column X cannot be determined", which tells you nothing useful -
+// it almost always means you made a measure where you needed a column.
+//
+// The one rule behind everything: revenue only counts when order_status =
+// "Completed". My first dashboard reported EUR 2.49M because it was quietly counting
+// returned orders as sales, and I only caught it by checking against my SQL.
+// =====================================================================================
+
+
+// =====================================================================================
+// SECTION 1 - CORE MEASURES  (create these on the _Measures table)
+// =====================================================================================
+
+// M1 CORE
+Total Revenue =
+CALCULATE (
+    SUM ( fact_order_items[line_revenue] ),
+    fact_orders[order_status] = "Completed"
+)
+
+// M2 CORE
+Total Cost =
+CALCULATE (
+    SUM ( fact_order_items[line_cost] ),
+    fact_orders[order_status] = "Completed"
+)
+
+// M3 CORE
+Total Profit =
+CALCULATE (
+    SUM ( fact_order_items[line_profit] ),
+    fact_orders[order_status] = "Completed"
+)
+
+// M4 CORE
+// Use DIVIDE rather than "/" so an empty filter returns blank instead of an error.
+Profit Margin % =
+DIVIDE ( [Total Profit], [Total Revenue] )
+
+// M5 CORE
+Total Transactions =
+CALCULATE (
+    COUNTROWS ( fact_order_items ),
+    fact_orders[order_status] = "Completed"
+)
+
+// M6 CORE
+Total Orders =
+CALCULATE (
+    DISTINCTCOUNT ( fact_order_items[order_id] ),
+    fact_orders[order_status] = "Completed"
+)
+
+// M7 CORE
+Active Customers =
+CALCULATE (
+    DISTINCTCOUNT ( fact_orders[customer_id] ),
+    fact_orders[order_status] = "Completed"
+)
+
+// M8 CORE
+Avg Order Value =
+DIVIDE ( [Total Revenue], [Total Orders] )
+
+// M9 OPTIONAL
+Units Sold =
+CALCULATE (
+    SUM ( fact_order_items[quantity] ),
+    fact_orders[order_status] = "Completed"
+)
+
+// M10 OPTIONAL
+Revenue per Customer =
+DIVIDE ( [Total Revenue], [Active Customers] )
+
+
+// =====================================================================================
+// SECTION 2 - TIME INTELLIGENCE
+// These need dim_date marked as a date table first
+// (Table tools > Mark as date table > full_date).
+// =====================================================================================
+
+// M11 CORE
+Revenue PM =
+CALCULATE ( [Total Revenue], DATEADD ( dim_date[full_date], -1, MONTH ) )
+
+// M12 CORE
+Revenue MoM % =
+DIVIDE ( [Total Revenue] - [Revenue PM], [Revenue PM] )
+
+// M13 OPTIONAL
+Revenue PY =
+CALCULATE ( [Total Revenue], SAMEPERIODLASTYEAR ( dim_date[full_date] ) )
+
+// M14 OPTIONAL
+Revenue YoY % =
+DIVIDE ( [Total Revenue] - [Revenue PY], [Revenue PY] )
+
+// M15 OPTIONAL
+Revenue YTD =
+TOTALYTD ( [Total Revenue], dim_date[full_date] )
+
+// M16 OPTIONAL
+// Rolling 3-month average - smooths the November/December spike so the underlying
+// trend is readable.
+Revenue 3M Rolling Avg =
+DIVIDE (
+    CALCULATE (
+        [Total Revenue],
+        DATESINPERIOD ( dim_date[full_date], MAX ( dim_date[full_date] ), -3, MONTH )
+    ),
+    3
+)
+
+
+// =====================================================================================
+// SECTION 3 - REVENUE LEAKAGE
+// Two separate leaks: orders that never complete, and discount given away on the
+// ones that do.
+// =====================================================================================
+
+// M17 CORE
+Returned Revenue =
+CALCULATE (
+    SUM ( fact_order_items[line_revenue] ),
+    fact_orders[order_status] = "Returned"
+)
+
+// M18 CORE
+// NOTE: the real dataset has no cancelled orders, only returns, so this shows blank
+// there. It is populated in the synthetic dataset. Keep it - it costs nothing.
+Cancelled Revenue =
+CALCULATE (
+    SUM ( fact_order_items[line_revenue] ),
+    fact_orders[order_status] = "Cancelled"
+)
+
+// M19 CORE
+Leaked Revenue =
+[Returned Revenue] + [Cancelled Revenue]
+
+// M20 CORE
+// Denominator is gross demand - everything customers tried to buy - not net revenue.
+Leakage Rate % =
+DIVIDE ( [Leaked Revenue], [Total Revenue] + [Leaked Revenue] )
+
+// M21 OPTIONAL - synthetic dataset only (the real data has no discount column)
+Discount Given =
+CALCULATE (
+    SUM ( fact_order_items[discount_amount] ),
+    fact_orders[order_status] = "Completed"
+)
+
+// M22 OPTIONAL - synthetic dataset only
+Gross at List Price =
+CALCULATE (
+    SUM ( fact_order_items[gross_amount] ),
+    fact_orders[order_status] = "Completed"
+)
+
+// M23 OPTIONAL - synthetic dataset only
+Discount Rate % =
+DIVIDE ( [Discount Given], [Gross at List Price] )
+
+
+// =====================================================================================
+// SECTION 4 - CALCULATED COLUMNS ON dim_customers
+// Create these with "New column" while dim_customers is selected.
+// Order matters - each one uses the ones above it.
+// =====================================================================================
+
+// C1 CORE - on dim_customers
+First Order Date =
+CALCULATE (
+    MIN ( fact_orders[order_date] ),
+    fact_orders[order_status] = "Completed"
+)
+
+// C2 CORE - on dim_customers
+// This is the cohort key. Text like "2010-03".
+Cohort Month =
+IF (
+    ISBLANK ( dim_customers[First Order Date] ),
+    "No purchase",
+    FORMAT ( dim_customers[First Order Date], "YYYY-MM" )
+)
+
+// C3 CORE - on dim_customers
+Lifetime Orders =
+CALCULATE (
+    DISTINCTCOUNT ( fact_orders[order_id] ),
+    fact_orders[order_status] = "Completed"
+)
+
+// C4 CORE - on dim_customers
+Lifetime Revenue =
+CALCULATE (
+    SUM ( fact_order_items[line_revenue] ),
+    fact_orders[order_status] = "Completed"
+)
+
+// C5 CORE - on dim_customers
+// "Today" is the last order date in the dataset, NOT TODAY(). Using TODAY() would
+// make every customer look churned, because the data stops in the past.
+Recency Days =
+VAR LastOrder =
+    CALCULATE (
+        MAX ( fact_orders[order_date] ),
+        fact_orders[order_status] = "Completed"
+    )
+VAR DatasetEnd =
+    CALCULATE ( MAX ( fact_orders[order_date] ), ALL ( fact_orders ) )
+RETURN
+    IF ( NOT ISBLANK ( LastOrder ), DATEDIFF ( LastOrder, DatasetEnd, DAY ) )
+
+// C6 CORE - on dim_customers
+// One-time vs repeat, as text so it can be used as a chart axis.
+Customer Type =
+SWITCH (
+    TRUE (),
+    dim_customers[Lifetime Orders] = 0, "No purchase",
+    dim_customers[Lifetime Orders] = 1, "One-time buyer",
+    "Repeat buyer"
+)
+
+// C7 CORE - on dim_customers
+// How many orders, bucketed. Used for the order-frequency chart.
+Order Frequency Band =
+SWITCH (
+    TRUE (),
+    dim_customers[Lifetime Orders] = 0, "No purchase",
+    dim_customers[Lifetime Orders] = 1, "1 order",
+    dim_customers[Lifetime Orders] = 2, "2 orders",
+    dim_customers[Lifetime Orders] <= 4, "3-4 orders",
+    dim_customers[Lifetime Orders] <= 9, "5-9 orders",
+    "10+ orders"
+)
+
+// C8 CORE - on dim_customers
+// Top 30% vs bottom 70% by revenue. A calculated column (not a measure) so it can
+// be dropped onto a chart axis.
+//
+// How it works: rank every paying customer by revenue, then check whether that rank
+// falls inside the top 30% of the customer count.
+Value Group =
+VAR PayingCustomers =
+    FILTER ( ALL ( dim_customers ), dim_customers[Lifetime Revenue] > 0 )
+VAR TotalPaying =
+    COUNTROWS ( PayingCustomers )
+VAR MyRank =
+    RANKX ( PayingCustomers, dim_customers[Lifetime Revenue], , DESC )
+RETURN
+    IF (
+        dim_customers[Lifetime Revenue] > 0,
+        IF ( MyRank <= TotalPaying * 0.30, "Top 30%", "Bottom 70%" ),
+        "No purchase"
+    )
+
+// C9 CORE - on dim_customers
+// Which tenth of the customer base they fall into. 1 = the top 10% by revenue.
+Revenue Decile =
+VAR PayingCustomers =
+    FILTER ( ALL ( dim_customers ), dim_customers[Lifetime Revenue] > 0 )
+VAR TotalPaying =
+    COUNTROWS ( PayingCustomers )
+VAR MyRank =
+    RANKX ( PayingCustomers, dim_customers[Lifetime Revenue], , DESC )
+RETURN
+    IF (
+        dim_customers[Lifetime Revenue] > 0,
+        ROUNDUP ( DIVIDE ( MyRank, TotalPaying ) * 10, 0 )
+    )
+
+
+// =====================================================================================
+// SECTION 5 - RFM SEGMENTATION  (calculated columns on dim_customers)
+//
+// Each customer gets a 1-5 score on Recency, Frequency and Monetary, where 5 is
+// always good. The scores are quintiles: rank everyone, then split the ranked list
+// into five equal groups.
+//
+// (I originally wrote these with PERCENTRANK.INC, which is an Excel function that
+//  does not exist in DAX. RANKX does the same job and definitely works.)
+// =====================================================================================
+
+// C10 CORE - on dim_customers
+// Recency: fewer days since last order is better, so rank ASCENDING.
+R Score =
+VAR Buyers =
+    FILTER ( ALL ( dim_customers ), NOT ISBLANK ( dim_customers[Recency Days] ) )
+VAR TotalBuyers =
+    COUNTROWS ( Buyers )
+VAR MyRank =
+    RANKX ( Buyers, dim_customers[Recency Days], , ASC )
+RETURN
+    IF (
+        NOT ISBLANK ( dim_customers[Recency Days] ),
+        6 - ROUNDUP ( DIVIDE ( MyRank, TotalBuyers ) * 5, 0 )
+    )
+
+// C11 CORE - on dim_customers
+// Frequency: more orders is better, so rank DESCENDING.
+F Score =
+VAR Buyers =
+    FILTER ( ALL ( dim_customers ), dim_customers[Lifetime Orders] > 0 )
+VAR TotalBuyers =
+    COUNTROWS ( Buyers )
+VAR MyRank =
+    RANKX ( Buyers, dim_customers[Lifetime Orders], , DESC )
+RETURN
+    IF (
+        dim_customers[Lifetime Orders] > 0,
+        6 - ROUNDUP ( DIVIDE ( MyRank, TotalBuyers ) * 5, 0 )
+    )
+
+// C12 CORE - on dim_customers
+// Monetary: more revenue is better, so rank DESCENDING.
+M Score =
+VAR Buyers =
+    FILTER ( ALL ( dim_customers ), dim_customers[Lifetime Revenue] > 0 )
+VAR TotalBuyers =
+    COUNTROWS ( Buyers )
+VAR MyRank =
+    RANKX ( Buyers, dim_customers[Lifetime Revenue], , DESC )
+RETURN
+    IF (
+        dim_customers[Lifetime Revenue] > 0,
+        6 - ROUNDUP ( DIVIDE ( MyRank, TotalBuyers ) * 5, 0 )
+    )
+
+// C13 CORE - on dim_customers
+// The eight segments. Same logic as sql/06_rfm_segmentation.sql, so the dashboard
+// and the SQL export always agree.
+RFM Segment =
+VAR R = dim_customers[R Score]
+VAR F = dim_customers[F Score]
+VAR M = dim_customers[M Score]
+RETURN
+    SWITCH (
+        TRUE (),
+        ISBLANK ( R ), "No purchase",
+        R >= 4 && F >= 4 && M >= 4, "Champions",
+        R >= 3 && F >= 3,           "Loyal Customers",
+        R >= 4 && F <= 2,           "New Customers",
+        R = 3  && F <= 2,           "Promising",
+        R <= 2 && F >= 4 && M >= 4, "At Risk - High Value",
+        R <= 2 && F >= 3,           "At Risk",
+        R <= 2 && F <= 2 && M >= 3, "Hibernating",
+        "Lost"
+    )
+
+
+// =====================================================================================
+// SECTION 6 - COHORT RETENTION
+// =====================================================================================
+
+// C14 CORE - on fact_orders (NOT on dim_customers)
+// How many months after the customer's first purchase this order happened.
+// 0 = their first month, 1 = the next month, and so on.
+//
+// The trick: turn (year, month) into a single number with year * 12 + month, then
+// subtract. That avoids fiddly date maths entirely.
+Month Index =
+VAR FirstOrder =
+    RELATED ( dim_customers[First Order Date] )
+RETURN
+    IF (
+        NOT ISBLANK ( FirstOrder ),
+        ( YEAR ( fact_orders[order_date] ) * 12 + MONTH ( fact_orders[order_date] ) )
+            - ( YEAR ( FirstOrder ) * 12 + MONTH ( FirstOrder ) )
+    )
+
+// M24 CORE
+// The size of the cohort itself. ALLEXCEPT strips every filter on dim_customers
+// except the cohort, so the denominator stays fixed while the numerator moves
+// across the retention matrix.
+Cohort Size =
+CALCULATE (
+    DISTINCTCOUNT ( dim_customers[customer_id] ),
+    ALLEXCEPT ( dim_customers, dim_customers[Cohort Month] )
+)
+
+// M25 CORE
+Retained Customers =
+CALCULATE (
+    DISTINCTCOUNT ( fact_orders[customer_id] ),
+    fact_orders[order_status] = "Completed"
+)
+
+// M26 CORE - this fills the retention heat map
+Retention % =
+DIVIDE ( [Retained Customers], [Cohort Size] )
+
+// M27 CORE
+Repeat Customers =
+CALCULATE (
+    DISTINCTCOUNT ( dim_customers[customer_id] ),
+    dim_customers[Customer Type] = "Repeat buyer"
+)
+
+// M28 CORE
+One-Time Customers =
+CALCULATE (
+    DISTINCTCOUNT ( dim_customers[customer_id] ),
+    dim_customers[Customer Type] = "One-time buyer"
+)
+
+// M29 CORE
+Repeat Rate % =
+DIVIDE ( [Repeat Customers], [Repeat Customers] + [One-Time Customers] )
+
+
+// =====================================================================================
+// SECTION 7 - CUSTOMER CONCENTRATION (the Pareto finding)
+// =====================================================================================
+
+// M30 CORE
+// Share of revenue held by the top 30% of customers.
+// Uses the Value Group column (C8), so it is simple and fast.
+Top 30% Revenue Share =
+VAR TopRevenue =
+    CALCULATE (
+        [Total Revenue],
+        ALLSELECTED ( dim_customers ),
+        dim_customers[Value Group] = "Top 30%"
+    )
+VAR AllRevenue =
+    CALCULATE ( [Total Revenue], ALLSELECTED ( dim_customers ) )
+RETURN
+    DIVIDE ( TopRevenue, AllRevenue )
+
+// M31 CORE
+// Share held by the top decile. On the real dataset this is the headline number.
+Top 10% Revenue Share =
+VAR TopRevenue =
+    CALCULATE (
+        [Total Revenue],
+        ALLSELECTED ( dim_customers ),
+        dim_customers[Revenue Decile] = 1
+    )
+VAR AllRevenue =
+    CALCULATE ( [Total Revenue], ALLSELECTED ( dim_customers ) )
+RETURN
+    DIVIDE ( TopRevenue, AllRevenue )
+
+// M32 OPTIONAL
+// Running share of revenue down the ranked decile list - this draws the Pareto curve.
+// Put it on a line chart with Revenue Decile on the X axis.
+Cumulative Revenue % =
+VAR CurrentDecile =
+    MAX ( dim_customers[Revenue Decile] )
+VAR CumulativeRevenue =
+    CALCULATE (
+        [Total Revenue],
+        ALLSELECTED ( dim_customers ),
+        dim_customers[Revenue Decile] <= CurrentDecile
+    )
+VAR AllRevenue =
+    CALCULATE ( [Total Revenue], ALLSELECTED ( dim_customers ) )
+RETURN
+    DIVIDE ( CumulativeRevenue, AllRevenue )
+
+
+// =====================================================================================
+// SECTION 8 - DYNAMIC TITLES  (all OPTIONAL, but they make it feel finished)
+// =====================================================================================
+
+// M33 OPTIONAL
+// Bind this to a card, or to a visual's title via the fx button, and the headline
+// number updates itself when someone filters the page.
+Pareto Page Title =
+"Customer concentration: the top 30% generate "
+    & FORMAT ( [Top 30% Revenue Share], "0.0%" )
+    & " of revenue"
+
+// M34 OPTIONAL
+MoM Arrow =
+VAR Change = [Revenue MoM %]
+RETURN
+    SWITCH (
+        TRUE (),
+        ISBLANK ( Change ), "",
+        Change > 0, "▲ " & FORMAT ( Change, "0.0%" ),
+        Change < 0, "▼ " & FORMAT ( ABS ( Change ), "0.0%" ),
+        "0.0%"
+    )
+
+// M35 OPTIONAL
+// Put this in a small card at the bottom of every page so the viewer can always see
+// what the current filters add up to.
+Filter Context Footer =
+"Showing "
+    & FORMAT ( [Total Transactions], "#,##0" )
+    & " transactions from "
+    & FORMAT ( [Active Customers], "#,##0" )
+    & " customers"
