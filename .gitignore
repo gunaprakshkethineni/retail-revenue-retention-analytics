@@ -1,0 +1,20 @@
+# The raw source file is 45 MB - too big for GitHub, and anyone can download it
+# themselves from https://archive.ics.uci.edu/dataset/502/online+retail+ii
+data_raw/*.xlsx
+data_raw/*.zip
+
+# Generated data - rebuild it with python/generate_data.py or clean_online_retail.py
+# (Comment these two lines out if you WANT the CSVs in the repo so people can open
+#  the Power BI file without running anything. data_real/ is about 4 MB, which is fine.)
+data/
+# data_real/
+
+# Power BI temp files
+*.pbix.tmp
+~$*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
